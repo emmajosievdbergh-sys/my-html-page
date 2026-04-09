@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rolling-Horizon Optimisation Model — Full Reference</title>
+<style>
+/* ── shared resets & nav ── */
+*{box-sizing:border-box;}
+body{margin:0;background:#f0ede6;font-family:Georgia,'Times New Roman',serif;color:#141413;}
+.site-nav{position:sticky;top:0;z-index:100;background:#1e1d1b;display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.08);}
+.site-nav a{color:rgba(255,255,255,0.7);font-family:'Courier New',monospace;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;padding:10px 18px;text-decoration:none;border-right:1px solid rgba(255,255,255,0.08);transition:background 0.15s,color 0.15s;}
+.site-nav a:hover{background:rgba(255,255,255,0.07);color:#fff;}
+.site-nav a.active{background:rgba(255,255,255,0.1);color:#fff;}
+.section{display:none;padding:16px 0 24px;}
+.section.active{display:block;}
+
+/* page heading */
+.sec-title{font-family:'Courier New',monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.5);background:#1e1d1b;padding:6px 18px;margin-bottom:0;}
+
+/* ── page 1 (core formulation) styles ── */
+
+  @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+  *{box-sizing:border-box;}
+  .sch{font-family:'Crimson Pro',serif;color:var(--color-text-primary);padding:0 0 1rem;}
+  .title-bar{background:var(--color-background-secondary);border-bottom:1.5px solid var(--color-border-secondary);padding:11px 16px;margin-bottom:12px;}
+  .title-bar h1{font-size:16px;font-weight:600;margin:0;font-family:'Crimson Pro',serif;}
+  .grid{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:10px;padding:0 12px;}
+  .col{display:flex;flex-direction:column;gap:10px;}
+  .card{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:9px;padding:11px 14px;}
+  .card-title{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:500;letter-spacing:0.07em;text-transform:uppercase;padding-bottom:6px;margin-bottom:9px;border-bottom:0.5px solid var(--color-border-secondary);}
+  .blue{color:#2563C4;}.green{color:#1D7A4F;}.purple{color:#6B3DB0;}
+  @media(prefers-color-scheme:dark){.blue{color:#7aabf0;}.green{color:#5dcaa5;}.purple{color:#c4a8f8;}}
+  .mi{font-style:italic;}
+  .mo{font-family:'JetBrains Mono',monospace;font-size:12px;}
+  p{margin:0 0 4px;font-size:13.5px;line-height:1.7;}
+  .sub-head{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin:9px 0 3px;}
+  .sub-head:first-child{margin-top:0;}
+  .var-row{font-size:13px;line-height:1.75;padding-left:0;}
+  .eq{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:5px;padding:6px 10px;margin:5px 0;font-size:13px;line-height:1.7;}
+  .obj-stage{font-size:12px;font-weight:500;letter-spacing:0.03em;margin:9px 0 3px;}
+  .obj-stage:first-child{margin-top:0;}
+  .cg-item{margin-bottom:8px;}
+  .cg-item:last-child{margin-bottom:0;}
+  .cg-name{font-size:13.5px;font-weight:500;margin-bottom:1px;}
+  .cg-desc{font-size:12px;color:var(--color-text-secondary);line-height:1.5;}
+  .note{font-size:11.5px;color:var(--color-text-secondary);font-style:italic;margin-top:7px;border-top:0.5px solid var(--color-border-tertiary);padding-top:6px;line-height:1.5;}
+  .footer{text-align:center;font-size:11px;color:var(--color-text-secondary);font-style:italic;margin:12px 14px 0;padding-top:8px;border-top:0.5px solid var(--color-border-tertiary);}
+  sup{font-size:0.72em;vertical-align:super;line-height:0;}
+  sub{font-size:0.72em;vertical-align:sub;line-height:0;}
+
+
+/* ── page 2 (constraint equations) styles — namespaced via .ce- wrapper ── */
+
+  @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+  * { box-sizing: border-box; }
+  .sch { font-family: 'Crimson Pro', serif; color: var(--color-text-primary); padding: 0 0 1rem; font-size: 14px; }
+  .title-bar { background: var(--color-background-secondary); border-bottom: 1.5px solid var(--color-border-secondary); padding: 11px 16px; margin-bottom: 12px; }
+  .title-bar h1 { font-size: 16px; font-weight: 600; margin: 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 0 12px; }
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  .card { background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-radius: 9px; padding: 11px 13px; }
+  .card-title { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; padding-bottom: 6px; margin-bottom: 8px; border-bottom: 0.5px solid var(--color-border-secondary); }
+  .blue { color: #2563C4; } .green { color: #1D7A4F; } .amber { color: #956008; } .purple { color: #6B3DB0; } .red { color: #A0281E; }
+  @media (prefers-color-scheme: dark) {
+    .blue{color:#7aabf0;}.green{color:#5dcaa5;}.amber{color:#e8b840;}.purple{color:#c4a8f8;}.red{color:#f09090;}
+  }
+  .eq-block { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: 6px; padding: 6px 10px; margin: 5px 0; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.65; }
+  .eq-label { font-size: 11px; color: var(--color-text-secondary); font-style: italic; margin: 7px 0 2px; font-family: 'Crimson Pro', serif; }
+  .eq-label:first-child { margin-top: 0; }
+  .qfor { display: block; font-size: 10px; color: var(--color-text-secondary); margin-top: 2px; font-style: italic; font-family: 'Crimson Pro', serif; }
+  .note { font-size: 11.5px; color: var(--color-text-secondary); font-style: italic; margin-top: 7px; border-top: 0.5px solid var(--color-border-tertiary); padding-top: 6px; line-height: 1.5; }
+  .tilde { position: relative; display: inline-block; }
+  .domain-row { margin: 3px 0; font-size: 11.5px; }
+  .domain-row .mo { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .footer { text-align: center; font-size: 11px; color: var(--color-text-secondary); font-style: italic; margin: 12px 14px 0; padding-top: 8px; border-top: 0.5px solid var(--color-border-tertiary); }
+
+
+/* ── page 3 (rolling horizon) styles ── */
+
+  @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+  *{box-sizing:border-box;}
+  .rh{font-family:'Crimson Pro',serif;color:var(--color-text-primary);padding:1rem 1rem 0.5rem;}
+  .win-wrap{margin-bottom:14px;}
+  .win-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:5px;}
+  .win-strip{display:flex;gap:3px;align-items:center;}
+  .day-cell{height:22px;min-width:22px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10px;transition:background 0.35s,color 0.35s,border-color 0.35s;border:0.5px solid transparent;}
+  .day-past{background:var(--color-background-tertiary);color:var(--color-text-tertiary);border-color:var(--color-border-tertiary);}
+  .day-impl{background:#1D9E75;color:#E1F5EE;border-color:#0F6E56;font-weight:500;}
+  .day-window{background:#E6F1FB;color:#185FA5;border-color:#378ADD;}
+  .day-future{background:var(--color-background-secondary);color:var(--color-text-tertiary);border-color:var(--color-border-tertiary);}
+  @media(prefers-color-scheme:dark){
+    .day-window{background:#0C447C;color:#B5D4F4;border-color:#378ADD;}
+    .day-impl{background:#085041;color:#9FE1CB;border-color:#1D9E75;}
+  }
+  .win-legend{display:flex;gap:14px;margin-top:5px;}
+  .leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-secondary);}
+  .leg-dot{width:10px;height:10px;border-radius:2px;}
+  .ld-impl{background:#1D9E75;}
+  .ld-win{background:#378ADD;}
+  .ld-past{background:var(--color-border-tertiary);}
+  .steps-row{display:flex;gap:0;margin-bottom:14px;border-radius:8px;overflow:hidden;border:0.5px solid var(--color-border-tertiary);}
+  .step-pip{flex:1;padding:8px 4px;text-align:center;cursor:pointer;border-right:0.5px solid var(--color-border-tertiary);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-text-secondary);background:var(--color-background-secondary);transition:background 0.2s,color 0.2s;}
+  .step-pip:last-child{border-right:none;}
+  .step-pip.active{background:#185FA5;color:#E6F1FB;}
+  .step-pip.done{background:var(--color-background-tertiary);color:var(--color-text-tertiary);}
+  @media(prefers-color-scheme:dark){.step-pip.active{background:#0C447C;color:#B5D4F4;}}
+  .card{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:10px;padding:16px 18px;min-height:210px;}
+  .step-num{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:6px;}
+  .step-title{font-size:18px;font-weight:600;margin-bottom:8px;line-height:1.3;}
+  .step-body{font-size:14.5px;line-height:1.7;color:var(--color-text-secondary);}
+  .step-body p{margin:0 0 6px;}
+  .step-eq{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:5px;padding:6px 10px;margin:8px 0;display:inline-block;}
+  .nav-row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;}
+  .nav-btn{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 18px;border:0.5px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;}
+  .nav-btn:hover{background:var(--color-background-tertiary);}
+  .nav-btn:disabled{opacity:0.35;cursor:default;}
+  .nav-ctr{font-size:12px;color:var(--color-text-secondary);font-style:italic;}
+  .tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 7px;border-radius:4px;margin-right:4px;vertical-align:middle;}
+  .tag-teal{background:#E1F5EE;color:#085041;border:0.5px solid #1D9E75;}
+  .tag-blue{background:#E6F1FB;color:#0C447C;border:0.5px solid #185FA5;}
+  .tag-gray{background:var(--color-background-tertiary);color:var(--color-text-secondary);border:0.5px solid var(--color-border-secondary);}
+  @media(prefers-color-scheme:dark){
+    .tag-teal{background:#085041;color:#9FE1CB;border-color:#1D9E75;}
+    .tag-blue{background:#0C447C;color:#B5D4F4;border-color:#378ADD;}
+  }
+  .repeat-note{margin-top:10px;padding:10px 14px;border-left:2px solid #1D9E75;background:var(--color-background-primary);border-radius:0 6px 6px 0;font-size:13px;font-style:italic;color:var(--color-text-secondary);}
+
+
+/* ── page 4 (SVG diagram) ── */
+.svg-section{padding:16px 16px 24px;max-width:960px;margin:0 auto;}
+.svg-section svg{width:100%;height:auto;background:white;border-radius:10px;border:0.5px solid rgba(31,30,29,0.15);padding:12px;}
+
+/* override title-bar on all sections to match */
+.title-bar{display:none!important;}
+
+/* section card wrapper */
+.sec-wrap{max-width:1200px;margin:0 auto;padding:0 4px;}
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="#" class="active" onclick="show('formulation',this);return false;">Core formulation</a>
+  <a href="#" onclick="show('constraints',this);return false;">Constraint equations</a>
+  <a href="#" onclick="show('rolling',this);return false;">Rolling horizon</a>
+  <a href="#" onclick="show('homemap',this);return false;">home(h) mapping</a>
+</nav>
+
+<!-- SECTION 1: Core formulation -->
+<div class="section active" id="sec-formulation">
+  <div class="sec-title">Final Rolling-Horizon Optimisation Model: Core Formulation</div>
+  <div class="sec-wrap">
+    <div class="sch">
+<div class="title-bar"><h1>Final Rolling-Horizon Optimisation Model: Core Formulation</h1></div>
+<div class="grid">
+
+<div class="col">
+<div class="card">
+  <div class="card-title blue">Sets and indices</div>
+  <p><span class="mi">j</span> ∈ 𝒥 &nbsp;: analysers</p>
+  <p><span class="mi">h</span> ∈ ℋ &nbsp;: reagent-linked test families</p>
+  <p><span class="mi">s</span> ∈ 𝒮 &nbsp;: bottle sizes</p>
+  <p><span class="mi">k</span> ∈ 𝒦<sub><span class="mi">h,s</span></sub> &nbsp;: bottle identity index</p>
+  <p><span class="mi">b</span> = (<span class="mi">h,s,k</span>) ∈ ℬ &nbsp;: bottle identity</p>
+  <p><span class="mi">t</span> ∈ 𝒯 &nbsp;: discrete planning periods</p>
+  <div class="note">Each bottle identity is tracked individually across time.</div>
+</div>
+
+<div class="card">
+  <div class="card-title blue">Inputs</div>
+  <p><span class="mi">F</span><sub><span class="mi">h,t</span></sub> : forecast demand for family <span class="mi">h</span> in period <span class="mi">t</span></p>
+  <p>RK<sub><span class="mi">j</span></sub> : rack slot capacity of analyser <span class="mi">j</span></p>
+  <p>δ<sub><span class="mi">h,s</span></sub> : initial usable yield of bottle type (<span class="mi">h,s</span>)</p>
+  <p>ℓ<sub><span class="mi">h</span></sub> : onboard life limit for reagent family <span class="mi">h</span></p>
+  <p>α : minimum service level</p>
+  <p>γ<sub><span class="mi">s</span></sub> : minimum same-day use fraction on opening</p>
+  <p><span class="mi">M</span> : big-<span class="mi">M</span> constant</p>
+  <p style="margin-top:6px;">Initial state: <span class="mi">y</span><sup>0,on</sup><sub><span class="mi">b</span></sub>, <span class="mi">y</span><sup>0,fr</sup><sub><span class="mi">b</span></sub>, <span class="mi">y</span><sup>0,dis</sup><sub><span class="mi">b</span></sub>, <span class="mi">y</span><sup>0,new</sup><sub><span class="mi">b</span></sub>, <span class="mi">R</span><sup>0</sup><sub><span class="mi">b</span></sub>, age<sup>0</sup><sub><span class="mi">b</span></sub></p>
+</div>
+</div>
+
+<div class="col">
+<div class="card">
+  <div class="card-title blue">Decision and state variables</div>
+
+  <div class="sub-head green">Location state</div>
+  <div class="var-row"><span class="mi">y</span><sup>on</sup><sub><span class="mi">b,t</span></sub>, <span class="mi">y</span><sup>fr</sup><sub><span class="mi">b,t</span></sub>, <span class="mi">y</span><sup>dis</sup><sub><span class="mi">b,t</span></sub>, <span class="mi">y</span><sup>new</sup><sub><span class="mi">b,t</span></sub> ∈ {0,1}</div>
+
+  <div class="sub-head green">Transition events</div>
+  <div class="var-row"><span class="mi">a</span><sup>new</sup><sub><span class="mi">b,t</span></sub>, <span class="mi">a</span><sup>fr</sup><sub><span class="mi">b,t</span></sub>, <span class="mi">f</span><sub><span class="mi">b,t</span></sub>, <span class="mi">d</span><sup>on</sup><sub><span class="mi">b,t</span></sub>, <span class="mi">d</span><sup>fr</sup><sub><span class="mi">b,t</span></sub> ∈ {0,1}</div>
+
+  <div class="sub-head green">Yield and volume</div>
+  <div class="var-row"><span class="mi">R</span><sub><span class="mi">b,t</span></sub>, <span class="mi">v</span><sub><span class="mi">b,t</span></sub>, <span class="mi">u</span><sup>old</sup><sub><span class="mi">b,t</span></sub>, <span class="mi">u</span><sup>new</sup><sub><span class="mi">b,t</span></sub>, <span class="mi">L</span><sub><span class="mi">b,t</span></sub> ≥ 0</div>
+
+  <div class="sub-head green">Demand</div>
+  <div class="var-row"><span class="mi">z</span><sub><span class="mi">h,t</span></sub>, <span class="mi">U</span><sub><span class="mi">h,t</span></sub> ≥ 0</div>
+
+  <div class="sub-head green">Age</div>
+  <div class="var-row">age<sub><span class="mi">b,t</span></sub> ∈ ℤ<sub>≥0</sub></div>
+
+  <div class="note">The model tracks bottle location, transitions, remaining yield, served demand, uncovered demand, and bottle age for each period.</div>
+</div>
+
+<div class="card">
+  <div class="card-title blue">Objective function</div>
+
+  <div class="obj-stage green">Stage 1 — minimise uncovered demand</div>
+  <div class="eq">min &nbsp;∑<sub><span class="mi">h</span></sub> ∑<sub><span class="mi">t</span></sub> <span class="mi">U</span><sub><span class="mi">h,t</span></sub></div>
+
+  <div class="obj-stage green" style="margin-top:8px;">Fix <span class="mi">U</span>* before Stage 2:</div>
+  <div class="eq">∑<sub><span class="mi">h</span></sub> ∑<sub><span class="mi">t</span></sub> <span class="mi">U</span><sub><span class="mi">h,t</span></sub> ≤ <span class="mi">U</span>*</div>
+
+  <div class="obj-stage green" style="margin-top:8px;">Stage 2 — minimise weighted operational cost</div>
+  <div class="eq" style="line-height:1.9;">
+    <span class="mi">p</span><sub>new</sub> ∑ <span class="mi">a</span><sup>new</sup><sub><span class="mi">b,t</span></sub>
+    &nbsp;+&nbsp; <span class="mi">p</span><sub>fr</sub> ∑ <span class="mi">a</span><sup>fr</sup><sub><span class="mi">b,t</span></sub><br>
+    + <span class="mi">p</span><sub>mv</sub> ∑ <span class="mi">f</span><sub><span class="mi">b,t</span></sub>
+    &nbsp;+&nbsp; <span class="mi">p</span><sub>dis</sub> ∑ (<span class="mi">d</span><sup>on</sup><sub><span class="mi">b,t</span></sub> + <span class="mi">d</span><sup>fr</sup><sub><span class="mi">b,t</span></sub>)<br>
+    + <span class="mi">p</span><sub>loss</sub> ∑ <span class="mi">L</span><sub><span class="mi">b,t</span></sub>
+    &nbsp;+&nbsp; <span class="mi">p</span><sub>on</sub> ∑ <span class="mi">y</span><sup>on</sup><sub><span class="mi">b,t</span></sub><br>
+    + <span class="mi">p</span><sub>hold</sub> ∑ <span class="mi">y</span><sup>fr</sup><sub><span class="mi">b,t</span></sub>
+  </div>
+  <div class="note">Stage 2 is solved subject to preserving the Stage 1 service level.</div>
+</div>
+</div>
+
+<div class="col">
+<div class="card">
+  <div class="card-title blue">Constraint groups</div>
+  <div class="cg-item">
+    <div class="cg-name">· State exclusivity</div>
+    <div class="cg-desc"><span class="mi">y</span><sup>on</sup><sub><span class="mi">b,t</span></sub> + <span class="mi">y</span><sup>fr</sup><sub><span class="mi">b,t</span></sub> + <span class="mi">y</span><sup>dis</sup><sub><span class="mi">b,t</span></sub> + <span class="mi">y</span><sup>new</sup><sub><span class="mi">b,t</span></sub> = 1 &nbsp;∀<span class="mi">b,t</span></div>
+  </div>
+  <div class="cg-item">
+    <div class="cg-name">· Rack capacity</div>
+    <div class="cg-desc">∑<sub>{<span class="mi">b</span>: home(<span class="mi">h<sub>b</sub></span>)=<span class="mi">j</span>}</sub> <span class="mi">y</span><sup>on</sup><sub><span class="mi">b,t</span></sub> ≤ RK<sub><span class="mi">j</span></sub> &nbsp;∀<span class="mi">j,t</span></div>
+  </div>
+  <div class="cg-item">
+    <div class="cg-name">· Transition source constraints</div>
+    <div class="cg-desc">Events can only occur from the correct start-of-day state; at most one load event per bottle per day.</div>
+  </div>
+  <div class="cg-item">
+    <div class="cg-name">· State balance equations</div>
+    <div class="cg-desc">End-of-day states updated from prior state and transition events: <span class="mi">y</span><sup>on</sup><sub><span class="mi">b,t</span></sub> = ỹ<sup>on</sup><sub><span class="mi">b,t</span></sub> + <span class="mi">a</span><sup>new</sup><sub><span class="mi">b,t</span></sub> + <span class="mi">a</span><sup>fr</sup><sub><span class="mi">b,t</span></sub> − <span class="mi">f</span><sub><span class="mi">b,t</span></sub> − <span class="mi">d</span><sup>on</sup><sub><span class="mi">b,t</span></sub>, and so on.</div>
+  </div>
+  <div class="cg-item">
+    <div class="cg-name">· Yield evolution</div>
+    <div class="cg-desc"><span class="mi">R</span><sub><span class="mi">b,t</span></sub> = R̃<sub><span class="mi">b,t</span></sub> + δ<sub><span class="mi">h,s</span></sub> <span class="mi">a</span><sup>new</sup><sub><span class="mi">b,t</span></sub> − <span class="mi">v</span><sub><span class="mi">b,t</span></sub> − <span class="mi">L</span><sub><span class="mi">b,t</span></sub>; consumption and loss bounded by availability.</div>
+  </div>
+  <div class="cg-item">
+    <div class="cg-name">· Minimum use on opening</div>
+    <div class="cg-desc"><span class="mi">u</span><sup>new</sup><sub><span class="mi">b,t</span></sub> ≥ γ<sub><span class="mi">s</span></sub> δ<sub><span class="mi">h,s</span></sub> <span class="mi">a</span><sup>new</sup><sub><span class="mi">b,t</span></sub> &nbsp;∀<span class="mi">b,t</span></div>
+  </div>
+  <div class="cg-item">
+    <div class="cg-name">· Age progression and expiry</div>
+    <div class="cg-desc">age<sub><span class="mi">b,t</span></sub> advances by 1 per active day (big-<span class="mi">M</span> linearisation); cannot exceed ℓ<sub><span class="mi">h</span></sub>.</div>
+  </div>
+  <div class="cg-item">
+    <div class="cg-name">· Demand balance</div>
+    <div class="cg-desc"><span class="mi">z</span><sub><span class="mi">h,t</span></sub> + <span class="mi">U</span><sub><span class="mi">h,t</span></sub> = <span class="mi">F</span><sub><span class="mi">h,t</span></sub> &nbsp;∀<span class="mi">h,t</span></div>
+  </div>
+  <div class="cg-item">
+    <div class="cg-name">· Service level constraints</div>
+    <div class="cg-desc">∑<sub><span class="mi">h</span></sub> <span class="mi">U</span><sub><span class="mi">h,t</span></sub> ≤ ⌊(1−α) ∑<sub><span class="mi">h</span></sub> <span class="mi">F</span><sub><span class="mi">h,t</span></sub>⌋ &nbsp;∀<span class="mi">t</span> &nbsp;(daily); analogous per-family bound over full window.</div>
+  </div>
+  <div class="cg-item">
+    <div class="cg-name">· Variable domains</div>
+    <div class="cg-desc">Binary, non-negative, and integer domain restrictions apply.</div>
+  </div>
+</div>
+</div>
+
+</div>
+<div class="footer">Single-window optimisation model solved repeatedly in a rolling horizon using updated bottle state and demand forecasts. &nbsp;·&nbsp; ỹ denotes start-of-day value: ỹ<sup>σ</sup><sub><span class="mi">b,t</span></sub> = <span class="mi">y</span><sup>σ</sup><sub><span class="mi">b,t</span>−1</sub> for <span class="mi">t</span> &gt; 1, equals <span class="mi">y</span><sup>0,σ</sup><sub><span class="mi">b</span></sub> at <span class="mi">t</span> = 1.</div>
+</div>
+  </div>
+</div>
+
+<!-- SECTION 2: Constraint equations -->
+<div class="section" id="sec-constraints">
+  <div class="sec-title">Constraint Equations — Rolling-Horizon MIP</div>
+  <div class="sec-wrap">
+    <div class="sch">
+  <div class="title-bar"><h1>Constraint Equations — Rolling-Horizon MIP</h1></div>
+  <div class="grid">
+
+    <!-- COL 1 -->
+    <div class="col">
+
+      <div class="card">
+        <div class="card-title blue">State exclusivity</div>
+        <div class="eq-block">
+          y<sup>on</sup><sub>b,t</sub> + y<sup>fr</sup><sub>b,t</sub> + y<sup>dis</sup><sub>b,t</sub> + y<sup>new</sup><sub>b,t</sub> = 1
+          <span class="qfor">∀ b ∈ ℬ, ∀ t ∈ 𝒯</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title blue">Rack capacity</div>
+        <div class="eq-block">
+          ∑<sub>{b: home(h<sub>b</sub>)=j}</sub> y<sup>on</sup><sub>b,t</sub> ≤ RK<sub>j</sub>
+          <span class="qfor">∀ j ∈ 𝒥, ∀ t ∈ 𝒯</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title blue">Transition source constraints</div>
+        <div class="eq-label">Fresh load requires unopened state:</div>
+        <div class="eq-block">a<sup>new</sup><sub>b,t</sub> ≤ ỹ<sup>new</sup><sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Fridge reload requires fridge state:</div>
+        <div class="eq-block">a<sup>fr</sup><sub>b,t</sub> ≤ ỹ<sup>fr</sup><sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Fridge move requires onboard state:</div>
+        <div class="eq-block">f<sub>b,t</sub> ≤ ỹ<sup>on</sup><sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Discard from analyser:</div>
+        <div class="eq-block">d<sup>on</sup><sub>b,t</sub> ≤ ỹ<sup>on</sup><sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Discard from fridge:</div>
+        <div class="eq-block">d<sup>fr</sup><sub>b,t</sub> ≤ ỹ<sup>fr</sup><sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Cannot load fresh and reload on same day:</div>
+        <div class="eq-block">a<sup>new</sup><sub>b,t</sub> + a<sup>fr</sup><sub>b,t</sub> ≤ 1<span class="qfor">∀ b ∈ ℬ, ∀ t ∈ 𝒯</span></div>
+        <div class="note">ỹ<sup>σ</sup><sub>b,t</sub> = y<sup>σ</sup><sub>b,t−1</sub> for t &gt; 1; equals y<sup>0,σ</sup><sub>b</sub> at t = 1.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title blue">State balance equations</div>
+        <div class="eq-label">Unopened state:</div>
+        <div class="eq-block">y<sup>new</sup><sub>b,t</sub> = ỹ<sup>new</sup><sub>b,t</sub> − a<sup>new</sup><sub>b,t</sub></div>
+        <div class="eq-label">Onboard state:</div>
+        <div class="eq-block">y<sup>on</sup><sub>b,t</sub> = ỹ<sup>on</sup><sub>b,t</sub> + a<sup>new</sup><sub>b,t</sub> + a<sup>fr</sup><sub>b,t</sub> − f<sub>b,t</sub> − d<sup>on</sup><sub>b,t</sub></div>
+        <div class="eq-label">Fridge state:</div>
+        <div class="eq-block">y<sup>fr</sup><sub>b,t</sub> = ỹ<sup>fr</sup><sub>b,t</sub> + f<sub>b,t</sub> − a<sup>fr</sup><sub>b,t</sub> − d<sup>fr</sup><sub>b,t</sub></div>
+        <div class="eq-label">Discarded state:</div>
+        <div class="eq-block">y<sup>dis</sup><sub>b,t</sub> = ỹ<sup>dis</sup><sub>b,t</sub> + d<sup>on</sup><sub>b,t</sub> + d<sup>fr</sup><sub>b,t</sub></div>
+        <div class="note">∀ b ∈ ℬ, ∀ t ∈ 𝒯</div>
+      </div>
+
+    </div>
+
+    <!-- COL 2 -->
+    <div class="col">
+
+      <div class="card">
+        <div class="card-title green">Yield evolution</div>
+        <div class="eq-label">Yield balance (opening adds δ, consumption and loss reduce):</div>
+        <div class="eq-block">R<sub>b,t</sub> = R̃<sub>b,t</sub> + δ<sub>h,s</sub> a<sup>new</sup><sub>b,t</sub> − v<sub>b,t</sub> − L<sub>b,t</sub><span class="qfor">∀ b ∈ ℬ, ∀ t ∈ 𝒯</span></div>
+        <div class="eq-label">Consumption = pre-existing + newly opened volume:</div>
+        <div class="eq-block">v<sub>b,t</sub> = u<sup>old</sup><sub>b,t</sub> + u<sup>new</sup><sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Consumption only if onboard:</div>
+        <div class="eq-block">v<sub>b,t</sub> ≤ δ<sub>h,s</sub>(ỹ<sup>on</sup><sub>b,t</sub> + a<sup>new</sup><sub>b,t</sub> + a<sup>fr</sup><sub>b,t</sub>)<span class="qfor">∀ b, t</span></div>
+        <div class="eq-block">v<sub>b,t</sub> ≤ R̃<sub>b,t</sub> + δ<sub>h,s</sub> a<sup>new</sup><sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Pre-existing volume bounds:</div>
+        <div class="eq-block">u<sup>old</sup><sub>b,t</sub> ≤ R̃<sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-block">u<sup>old</sup><sub>b,t</sub> ≤ δ<sub>h,s</sub>(ỹ<sup>on</sup><sub>b,t</sub> + a<sup>fr</sup><sub>b,t</sub>)<span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Newly opened volume — upper and lower bounds:</div>
+        <div class="eq-block">u<sup>new</sup><sub>b,t</sub> ≤ δ<sub>h,s</sub> a<sup>new</sup><sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-block">u<sup>new</sup><sub>b,t</sub> ≥ γ<sub>s</sub> δ<sub>h,s</sub> a<sup>new</sup><sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Loss bounds (only on discard, bounded by available yield):</div>
+        <div class="eq-block">L<sub>b,t</sub> ≤ δ<sub>h,s</sub>(d<sup>on</sup><sub>b,t</sub> + d<sup>fr</sup><sub>b,t</sub>)<span class="qfor">∀ b, t</span></div>
+        <div class="eq-block">L<sub>b,t</sub> ≤ R̃<sub>b,t</sub> + δ<sub>h,s</sub> a<sup>new</sup><sub>b,t</sub><span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Remaining yield = 0 for inactive bottles:</div>
+        <div class="eq-block">R<sub>b,t</sub> ≤ δ<sub>h,s</sub>(y<sup>on</sup><sub>b,t</sub> + y<sup>fr</sup><sub>b,t</sub>)<span class="qfor">∀ b, t</span></div>
+      </div>
+
+    </div>
+
+    <!-- COL 3 -->
+    <div class="col">
+
+      <div class="card">
+        <div class="card-title amber">Age progression and expiry</div>
+        <div class="eq-label">Age advances by 1 per active day (big-M linearisation):</div>
+        <div class="eq-block">age<sub>b,t</sub> ≥ age̊<sub>b,t</sub> + 1 − M(1 − y<sup>on</sup><sub>b,t</sub> − y<sup>fr</sup><sub>b,t</sub>)<span class="qfor">∀ b, t</span></div>
+        <div class="eq-block">age<sub>b,t</sub> ≤ age̊<sub>b,t</sub> + 1 + M(1 − y<sup>on</sup><sub>b,t</sub> − y<sup>fr</sup><sub>b,t</sub>)<span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Age = 0 when bottle is inactive:</div>
+        <div class="eq-block">age<sub>b,t</sub> ≤ ℓ<sub>h</sub>(y<sup>on</sup><sub>b,t</sub> + y<sup>fr</sup><sub>b,t</sub>)<span class="qfor">∀ b, t</span></div>
+        <div class="eq-label">Hard expiry — cannot exceed onboard life limit:</div>
+        <div class="eq-block">age<sub>b,t</sub> ≤ ℓ<sub>h</sub><span class="qfor">∀ b ∈ ℬ, ∀ t ∈ 𝒯</span></div>
+        <div class="note">age̊<sub>b,t</sub> = age<sub>b,t−1</sub> for t &gt; 1; equals age<sup>0</sup><sub>b</sub> at t = 1.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title amber">Demand balance and service level</div>
+        <div class="eq-label">Served demand = total yield consumed from family h:</div>
+        <div class="eq-block">z<sub>h,t</sub> = ∑<sub>{b: h<sub>b</sub>=h}</sub> v<sub>b,t</sub><span class="qfor">∀ h ∈ ℋ, ∀ t ∈ 𝒯</span></div>
+        <div class="eq-label">Demand split — covered + uncovered = forecast:</div>
+        <div class="eq-block">z<sub>h,t</sub> + U<sub>h,t</sub> = F<sub>h,t</sub><span class="qfor">∀ h ∈ ℋ, ∀ t ∈ 𝒯</span></div>
+        <div class="eq-label">Daily service level across all families:</div>
+        <div class="eq-block">∑<sub>h</sub> U<sub>h,t</sub> ≤ ⌊(1−α) ∑<sub>h</sub> F<sub>h,t</sub>⌋<span class="qfor">∀ t ∈ 𝒯</span></div>
+        <div class="eq-label">Per-family service level over full window:</div>
+        <div class="eq-block">∑<sub>t</sub> U<sub>h,t</sub> ≤ ⌊(1−α) ∑<sub>t</sub> F<sub>h,t</sub>⌋<span class="qfor">∀ h ∈ ℋ</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title purple">Objective — two-stage</div>
+        <div class="eq-label green">Stage 1 — minimise uncovered demand:</div>
+        <div class="eq-block">min ∑<sub>h</sub> ∑<sub>t</sub> U<sub>h,t</sub></div>
+        <div class="eq-label green">Fix Stage 1 value U* before Stage 2:</div>
+        <div class="eq-block">∑<sub>h</sub> ∑<sub>t</sub> U<sub>h,t</sub> ≤ U*</div>
+        <div class="eq-label green">Stage 2 — minimise weighted operational cost:</div>
+        <div class="eq-block">min &nbsp;p<sub>new</sub> ∑ a<sup>new</sup><sub>b,t</sub><br>
+          + p<sub>fr</sub> ∑ a<sup>fr</sup><sub>b,t</sub><br>
+          + p<sub>mv</sub> ∑ f<sub>b,t</sub><br>
+          + p<sub>dis</sub> ∑ (d<sup>on</sup><sub>b,t</sub> + d<sup>fr</sup><sub>b,t</sub>)<br>
+          + p<sub>loss</sub> ∑ L<sub>b,t</sub><br>
+          + p<sub>on</sub> ∑ y<sup>on</sup><sub>b,t</sub><br>
+          + p<sub>hold</sub> ∑ y<sup>fr</sup><sub>b,t</sub></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title purple">Variable domains</div>
+        <div class="domain-row"><span class="mo">y<sup>on</sup>, y<sup>fr</sup>, y<sup>dis</sup>, y<sup>new</sup></span> ∈ {0,1}</div>
+        <div class="domain-row"><span class="mo">a<sup>new</sup>, a<sup>fr</sup>, f, d<sup>on</sup>, d<sup>fr</sup></span> ∈ {0,1}</div>
+        <div class="domain-row"><span class="mo">R, v, u<sup>old</sup>, u<sup>new</sup>, L</span> ≥ 0</div>
+        <div class="domain-row"><span class="mo">z<sub>h,t</sub>, U<sub>h,t</sub></span> ≥ 0</div>
+        <div class="domain-row"><span class="mo">age<sub>b,t</sub></span> ∈ ℤ<sub>≥0</sub></div>
+        <div class="note">All indexed ∀ b ∈ ℬ, t ∈ 𝒯 unless stated otherwise.</div>
+      </div>
+
+    </div>
+  </div>
+  <div class="footer">~ denotes start-of-day value: ỹ<sup>σ</sup><sub>b,t</sub> = y<sup>σ</sup><sub>b,t−1</sub> for t &gt; 1, equals initial state y<sup>0,σ</sup><sub>b</sub> at t = 1. Likewise for R̃ and age̊.</div>
+</div>
+  </div>
+</div>
+
+<!-- SECTION 3: Rolling horizon -->
+<div class="section" id="sec-rolling">
+  <div class="sec-title">Rolling-Horizon Procedure — Epoch Loop</div>
+  <div class="sec-wrap">
+    <div class="rh">
+  <h2 class="sr-only">Rolling horizon procedure: interactive 6-step epoch loop stepper</h2>
+
+  <div class="win-wrap">
+    <div class="win-label">Planning timeline &mdash; epoch τ</div>
+    <div class="win-strip" id="winstrip"></div>
+    <div class="win-legend">
+      <div class="leg-item"><div class="leg-dot ld-past"></div>past / implemented</div>
+      <div class="leg-item"><div class="leg-dot ld-impl"></div>day t<sub>τ</sub> (implement)</div>
+      <div class="leg-item"><div class="leg-dot ld-win"></div>look-ahead window 𝒯<sub>τ</sub></div>
+    </div>
+  </div>
+
+  <div class="steps-row" id="pips"></div>
+
+  <div class="card" id="card"></div>
+
+  <div class="nav-row">
+    <button class="nav-btn" id="btn-prev" onclick="go(-1)">← prev</button>
+    <span class="nav-ctr" id="nav-ctr"></span>
+    <button class="nav-btn" id="btn-next" onclick="go(1)">next →</button>
+  </div>
+</div>
+
+<script>
+const W=5, PAST=3, TOTAL=14;
+const steps=[
+  {
+    tag:'tag-teal',tagLabel:'observe',
+    title:'Observe current bottle state',
+    body:`<p>At the start of epoch τ, the true system state is read from the analyser and refrigerator. This forms the initial condition for the upcoming solve.</p>
+    <p>State parameters supplied to the model:</p>
+    <div class="step-eq">y<sup>0,on</sup><sub>b</sub>, y<sup>0,fr</sup><sub>b</sub>, y<sup>0,dis</sup><sub>b</sub>, y<sup>0,new</sup><sub>b</sub>, R<sup>0</sup><sub>b</sub>, age<sup>0</sup><sub>b</sub></div>
+    <p>Each bottle's location state, remaining yield, and age since opening are recorded. The model does not assume a fresh inventory — it starts from reality.</p>`,
+    impl:0, winStart:0
+  },
+  {
+    tag:'tag-blue',tagLabel:'forecast',
+    title:'Provide demand forecast for window 𝒯<sub>τ</sub>',
+    body:`<p>Forecasted demand F<sub>h,t</sub> is supplied for every reagent family h and day t in the upcoming look-ahead window of length W:</p>
+    <div class="step-eq">𝒯<sub>τ</sub> = {t<sub>τ</sub>, t<sub>τ+1</sub>, …, t<sub>τ+W−1</sub>}</div>
+    <p>The forecast may come from a statistical model, historical averages, or a lab information system. The optimisation uses this as a hard input — demand uncertainty is handled by the rolling re-solve, not within the model itself.</p>`,
+    impl:0, winStart:0
+  },
+  {
+    tag:'tag-blue',tagLabel:'solve',
+    title:'Solve the two-stage MIP over 𝒯<sub>τ</sub>',
+    body:`<p>The full single-window formulation is solved across all W days of the look-ahead window:</p>
+    <p><span class="tag tag-teal">Stage 1</span> Minimise total uncovered demand → obtain U*</p>
+    <div class="step-eq">min ∑<sub>h</sub> ∑<sub>t</sub> U<sub>h,t</sub></div>
+    <p><span class="tag tag-blue">Stage 2</span> Fix ∑U<sub>h,t</sub> ≤ U*, then minimise weighted operational cost (openings, discards, yield loss, holding)</p>
+    <p>The solver returns a complete allocation plan for all W days — but only the first day's decisions are used.</p>`,
+    impl:0, winStart:0
+  },
+  {
+    tag:'tag-teal',tagLabel:'implement',
+    title:'Implement first-period decisions only',
+    body:`<p>From the full W-day plan returned by the solver, only the decisions for day t<sub>τ</sub> are executed on the analyser:</p>
+    <div class="step-eq">a<sup>new</sup><sub>b,t<sub>τ</sub></sub>, a<sup>fr</sup><sub>b,t<sub>τ</sub></sub>, f<sub>b,t<sub>τ</sub></sub>, d<sup>on</sup><sub>b,t<sub>τ</sub></sub>, d<sup>fr</sup><sub>b,t<sub>τ</sub></sub></div>
+    <p>Decisions for days t<sub>τ+1</sub> … t<sub>τ+W−1</sub> are discarded. This is the defining feature of the rolling horizon: the look-ahead provides foresight, but only the immediate action is committed.</p>`,
+    impl:1, winStart:0
+  },
+  {
+    tag:'tag-teal',tagLabel:'extract state',
+    title:'Extract end-of-day state for epoch τ+1',
+    body:`<p>After day t<sub>τ</sub> is executed, the resulting end-of-day bottle state is recorded and carried forward as the initial state for the next epoch:</p>
+    <div class="step-eq">y<sup>0,·</sup><sub>b</sub> ← y<sup>·</sup><sub>b,t<sub>τ</sub></sub> &nbsp;|&nbsp; R<sup>0</sup><sub>b</sub> ← R<sub>b,t<sub>τ</sub></sub> &nbsp;|&nbsp; age<sup>0</sup><sub>b</sub> ← age<sub>b,t<sub>τ</sub></sub></div>
+    <p>This ensures that the next solve begins from the true post-implementation state, including any yield consumed, bottles discarded, and ages advanced during day t<sub>τ</sub>.</p>`,
+    impl:1, winStart:0
+  },
+  {
+    tag:'tag-gray',tagLabel:'advance',
+    title:'Advance window → repeat at epoch τ+1',
+    body:`<p>The planning horizon shifts forward by one day:</p>
+    <div class="step-eq">𝒯<sub>τ+1</sub> = {t<sub>τ+1</sub>, …, t<sub>τ+W</sub>}</div>
+    <p>The process repeats from Step 1 with the new initial state and updated demand forecast. Each epoch re-solves the full W-day problem from the new position, incorporating any forecast revisions.</p>
+    <div class="repeat-note">↻ Return to Step 1 with τ ← τ+1. The window slides forward; the model never assumes its earlier plan was optimal.</div>`,
+    impl:1, winStart:1
+  }
+];
+
+let cur=0;
+
+function renderStrip(stepIdx){
+  const s=steps[stepIdx];
+  const strip=document.getElementById('winstrip');
+  strip.innerHTML='';
+  for(let i=0;i<TOTAL;i++){
+    const d=document.createElement('div');
+    d.className='day-cell';
+    const isPast=i<PAST+s.winStart;
+    const isImpl=!isPast && i===PAST+s.winStart && s.impl;
+    const inWin=!isPast && i>=PAST+s.winStart && i<PAST+s.winStart+W;
+    if(isPast) d.classList.add('day-past');
+    else if(isImpl) d.classList.add('day-impl');
+    else if(inWin) d.classList.add('day-window');
+    else d.classList.add('day-future');
+    const label=i<PAST+s.winStart ? '' : `t${i-PAST-s.winStart===0?'τ':i-PAST-s.winStart>0?`τ+${i-PAST-s.winStart}`:''}`;
+    d.textContent=i<PAST+s.winStart?'·':i===PAST+s.winStart?'tτ':i<PAST+s.winStart+W?`+${i-PAST-s.winStart}`:'';
+    d.style.fontSize='9px';
+    strip.appendChild(d);
+  }
+}
+
+function renderPips(){
+  const row=document.getElementById('pips');
+  row.innerHTML='';
+  steps.forEach((_,i)=>{
+    const p=document.createElement('div');
+    p.className='step-pip'+(i===cur?' active':i<cur?' done':'');
+    p.textContent=i+1;
+    p.onclick=()=>{cur=i;render();};
+    row.appendChild(p);
+  });
+}
+
+function renderCard(){
+  const s=steps[cur];
+  document.getElementById('card').innerHTML=
+    `<div class="step-num"><span class="tag ${s.tag}">${s.tagLabel}</span> step ${cur+1} of ${steps.length}</div>
+     <div class="step-title">${s.title}</div>
+     <div class="step-body">${s.body}</div>`;
+}
+
+function renderNav(){
+  document.getElementById('btn-prev').disabled=cur===0;
+  document.getElementById('btn-next').disabled=cur===steps.length-1;
+  document.getElementById('nav-ctr').textContent=
+    cur===steps.length-1?'↻ loops back to step 1':`${steps.length-1-cur} step${steps.length-1-cur!==1?'s':''} remaining`;
+}
+
+function render(){
+  renderStrip(cur);
+  renderPips();
+  renderCard();
+  renderNav();
+}
+
+function go(d){cur=Math.max(0,Math.min(steps.length-1,cur+d));render();}
+
+render();
+</script>
+  </div>
+</div>
+
+<!-- SECTION 4: home(h) mapping -->
+<div class="section" id="sec-homemap">
+  <div class="sec-title">home(h) Mapping and Rack Capacity Constraint</div>
+  <div style="max-width:1100px;margin:0 auto;padding:16px 16px 24px;font-family:Georgia,'Times New Roman',serif;">
+
+    <!-- top diagram -->
+    <div style="display:grid;grid-template-columns:220px 1fr 1fr;gap:0;align-items:center;margin-bottom:28px;">
+
+      <!-- families column -->
+      <div style="background:#f5f4f0;border:0.5px solid rgba(31,30,29,0.2);border-radius:12px;padding:14px 12px 14px;position:relative;">
+        <div style="font-size:12px;font-weight:600;color:#444441;margin-bottom:10px;text-align:center;">Reagent families ℋ</div>
+        <div style="background:#e1f5ee;border:0.5px solid #0f6e56;border-radius:7px;padding:8px 0;text-align:center;margin-bottom:7px;font-size:13px;font-weight:600;color:#085041;"><span style="font-style:italic;">h</span> = CBC</div>
+        <div style="background:#e1f5ee;border:0.5px solid #0f6e56;border-radius:7px;padding:8px 0;text-align:center;margin-bottom:7px;font-size:13px;font-weight:600;color:#085041;"><span style="font-style:italic;">h</span> = CRP</div>
+        <div style="background:#e1f5ee;border:0.5px solid #0f6e56;border-radius:7px;padding:8px 0;text-align:center;margin-bottom:14px;font-size:13px;font-weight:600;color:#085041;"><span style="font-style:italic;">h</span> = ALT</div>
+        <div style="background:#eeedfe;border:0.5px solid #534ab7;border-radius:7px;padding:8px 0;text-align:center;margin-bottom:7px;font-size:13px;font-weight:600;color:#3c3489;"><span style="font-style:italic;">h</span> = TSH</div>
+        <div style="background:#eeedfe;border:0.5px solid #534ab7;border-radius:7px;padding:8px 0;text-align:center;font-size:13px;font-weight:600;color:#3c3489;"><span style="font-style:italic;">h</span> = FT4</div>
+      </div>
+
+      <!-- arrows + analyser column -->
+      <div style="display:flex;flex-direction:column;gap:20px;padding:0 18px;align-items:center;">
+        <div style="font-size:11px;font-style:italic;color:#3d3d3a;margin-bottom:4px;align-self:flex-start;">home(<span style="font-style:italic;">h</span>)</div>
+
+        <!-- analyser j=1 -->
+        <div style="display:flex;align-items:center;gap:0;width:100%;">
+          <div style="flex:1;height:1.5px;background:linear-gradient(to right,#1D9E75,#1D9E75);position:relative;">
+            <div style="position:absolute;right:-6px;top:-4px;width:0;height:0;border-left:8px solid #1D9E75;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;"></div>
+          </div>
+          <div style="background:#e1f5ee;border:0.5px solid #0f6e56;border-radius:10px;padding:12px 18px;text-align:center;min-width:180px;">
+            <div style="font-size:13px;font-weight:600;color:#085041;margin-bottom:4px;">Analyser <span style="font-style:italic;">j</span> = 1</div>
+            <div style="font-size:11px;color:#0f6e56;">CBC, CRP, ALT</div>
+            <div style="font-size:11px;color:#0f6e56;">RK<sub>1</sub> rack slots</div>
+          </div>
+        </div>
+
+        <!-- analyser j=2 -->
+        <div style="display:flex;align-items:center;gap:0;width:100%;margin-top:8px;">
+          <div style="flex:1;height:1.5px;background:#7F77DD;position:relative;">
+            <div style="position:absolute;right:-6px;top:-4px;width:0;height:0;border-left:8px solid #7F77DD;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;"></div>
+          </div>
+          <div style="background:#eeedfe;border:0.5px solid #534ab7;border-radius:10px;padding:12px 18px;text-align:center;min-width:180px;">
+            <div style="font-size:13px;font-weight:600;color:#3c3489;margin-bottom:4px;">Analyser <span style="font-style:italic;">j</span> = 2</div>
+            <div style="font-size:11px;color:#534ab7;">TSH, FT4 &nbsp;·&nbsp; RK<sub>2</sub> slots</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- constraint column -->
+      <div style="display:flex;flex-direction:column;gap:20px;padding:0 0 0 8px;align-items:flex-start;">
+        <!-- constraint j=1 -->
+        <div style="display:flex;align-items:center;gap:0;width:100%;">
+          <div style="width:20px;height:1.5px;background:#1D9E75;position:relative;flex-shrink:0;">
+            <div style="position:absolute;right:-6px;top:-4px;width:0;height:0;border-left:8px solid #1D9E75;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;"></div>
+          </div>
+          <div style="background:#e1f5ee;border:0.5px solid #0f6e56;border-radius:10px;padding:12px 16px;flex:1;">
+            <div style="font-size:12px;font-weight:600;color:#085041;margin-bottom:5px;">Rack constraint</div>
+            <div style="font-family:'Courier New',monospace;font-size:11.5px;color:#0f6e56;line-height:1.7;">
+              ∑ <span style="font-style:italic;">y</span><sup>on</sup><sub><span style="font-style:italic;">b,t</span></sub> ≤ RK<sub>1</sub><br>
+              {<span style="font-style:italic;">b</span>: home(<span style="font-style:italic;">h<sub>b</sub></span>)=1}<br>
+              ∀ <span style="font-style:italic;">t</span> ∈ 𝒯
+            </div>
+          </div>
+        </div>
+
+        <!-- constraint j=2 -->
+        <div style="display:flex;align-items:center;gap:0;width:100%;margin-top:8px;">
+          <div style="width:20px;height:1.5px;background:#7F77DD;position:relative;flex-shrink:0;">
+            <div style="position:absolute;right:-6px;top:-4px;width:0;height:0;border-left:8px solid #7F77DD;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;"></div>
+          </div>
+          <div style="background:#eeedfe;border:0.5px solid #534ab7;border-radius:10px;padding:12px 16px;flex:1;">
+            <div style="font-size:12px;font-weight:600;color:#3c3489;margin-bottom:5px;">Rack constraint</div>
+            <div style="font-family:'Courier New',monospace;font-size:11.5px;color:#534ab7;line-height:1.7;">
+              ∑ <span style="font-style:italic;">y</span><sup>on</sup><sub><span style="font-style:italic;">b,t</span></sub> ≤ RK<sub>2</sub><br>
+              {<span style="font-style:italic;">b</span>: home(<span style="font-style:italic;">h<sub>b</sub></span>)=2}<br>
+              ∀ <span style="font-style:italic;">j,t</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- general form box -->
+    <div style="border:0.5px solid rgba(31,30,29,0.25);border-radius:10px;padding:20px 24px;background:#f5f4f0;border-style:dashed;">
+      <div style="font-size:11px;color:#3d3d3a;margin-bottom:12px;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.06em;">General form</div>
+      <div style="text-align:center;font-size:16px;font-weight:600;margin-bottom:6px;">
+        ∑ <span style="font-style:italic;">y</span><sup>on</sup><sub><span style="font-style:italic;">b,t</span></sub> &nbsp;≤&nbsp; RK<sub><span style="font-style:italic;">j</span></sub> &nbsp;&nbsp;&nbsp; ∀ <span style="font-style:italic;">j</span> ∈ 𝒥, ∀ <span style="font-style:italic;">t</span> ∈ 𝒯
+      </div>
+      <div style="text-align:center;font-size:12.5px;color:#3d3d3a;margin-bottom:14px;">
+        {<span style="font-style:italic;">b</span> ∈ ℬ : home(<span style="font-style:italic;">h<sub>b</sub></span>) = <span style="font-style:italic;">j</span>}
+      </div>
+      <div style="border-top:0.5px solid rgba(31,30,29,0.15);padding-top:12px;text-align:center;font-size:12.5px;color:#3d3d3a;line-height:1.8;">
+        home(<span style="font-style:italic;">h</span>) assigns each reagent family to exactly one analyser.<br>
+        Bottles <span style="font-style:italic;">b</span> = (<span style="font-style:italic;">h,s,k</span>) inherit the analyser of their family: home(<span style="font-style:italic;">h<sub>b</sub></span>) = home(<span style="font-style:italic;">h</span>).<br>
+        The constraint is enforced independently per analyser — racks are not shared.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function show(id, el) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.site-nav a').forEach(a => a.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
+  el.classList.add('active');
+  // re-run any scripts in the rolling horizon section
+  if (id === 'rolling' && !window._rhInit) {
+    window._rhInit = true;
+    render();
+  }
+}
+</script>
+</body>
+</html>
